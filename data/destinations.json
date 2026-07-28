@@ -1,29 +1,29 @@
 [
   {
     "id": "d001",
-    "name": "Kribi",
+    "name": "Mont Fébé",
     "country": "Cameroon",
     "continent": "Africa",
-    "description": "Golden beaches where the Lobe waterfalls pour directly into the Atlantic, famous for fresh seafood.",
-    "tags": ["beach", "food", "nature"],
-    "avg_cost_per_day": 45
+    "description": "Hilltop view offering panoramic vistas over the City of Seven Hills, serene monastery gardens, and fresh air.",
+    "tags": ["nature", "views", "culture", "hiking"],
+    "avg_cost_per_day": 35
   },
   {
     "id": "d002",
-    "name": "Bali",
-    "country": "Indonesia",
-    "continent": "Asia",
-    "description": "Tropical island of temples, rice terraces, surf beaches and vibrant food markets.",
-    "tags": ["beach", "food", "culture", "surf"],
-    "avg_cost_per_day": 60
+    "name": "Musée National",
+    "country": "Cameroon",
+    "continent": "Africa",
+    "description": "Historical landmark displaying Cameroon's royal artifacts, traditional masks, musical instruments, and independence history.",
+    "tags": ["history", "culture", "museums", "art"],
+    "avg_cost_per_day": 25
   },
   {
     "id": "d003",
-    "name": "Rome",
-    "country": "Italy",
-    "continent": "Europe",
-    "description": "Ancient capital packed with history, architecture and legendary cuisine.",
-    "tags": ["history", "food", "culture", "city"],
-    "avg_cost_per_day": 120
+    "name": "Mefou National Park",
+    "country": "Cameroon",
+    "continent": "Africa",
+    "description": "Protected primate sanctuary on the outskirts of Yaoundé, home to rescued gorillas, chimpanzees, and baboons in dense rainforest.",
+    "tags": ["wildlife", "nature", "eco-tourism", "hiking"],
+    "avg_cost_per_day": 50
   }
 ]
