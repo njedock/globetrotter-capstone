@@ -64,17 +64,42 @@ def get_current_user(request_obj) -> str | None:
 @auth_bp.route("/register", methods=["POST"])
 def register():
     """Register a new user.
-
-    Expected JSON body:
-        { "username": "alice", "password": "s3cr3t", "preferences": ["beach", "food"] }
-
-    Returns 201 on success, 400 on validation errors, 409 if the username is
-    already taken.
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - password
+          properties:
+            username:
+              type: string
+              example: alice
+            password:
+              type: string
+              example: s3cr3t
+            preferences:
+              type: array
+              items:
+                type: string
+              example: ["beach", "food"]
+    responses:
+      201:
+        description: User registered successfully
+      400:
+        description: Validation error
+      409:
+        description: Username already exists
     """
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()
     password = data.get("password", "")
-    preferences = data.get("preferences", [])  # optional list of interest tags
+    preferences = data.get("preferences", [])
 
     if not username or not password:
         return jsonify({"error": "username and password are required"}), 400
@@ -94,7 +119,6 @@ def register():
     user = {
         "id": str(uuid.uuid4()),
         "username": username,
-        # Store a Werkzeug password hash – never store plain-text passwords.
         "password_hash": generate_password_hash(password),
         "preferences": preferences,
     }
@@ -104,12 +128,33 @@ def register():
 
 @auth_bp.route("/login", methods=["POST"])
 def login():
-    """Authenticate a user and return a JWT.
-
-    Expected JSON body:
-        { "username": "alice", "password": "s3cr3t" }
-
-    Returns 200 with a token on success, 400/401 on failure.
+    """Authenticate a user and return a JWT token.
+    ---
+    tags:
+      - Authentication
+    parameters:
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - username
+            - password
+          properties:
+            username:
+              type: string
+              example: alice
+            password:
+              type: string
+              example: s3cr3t
+    responses:
+      200:
+        description: Login successful, returns JWT token
+      400:
+        description: Missing credentials
+      401:
+        description: Invalid credentials
     """
     data = request.get_json(silent=True) or {}
     username = data.get("username", "").strip()

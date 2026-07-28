@@ -23,19 +23,49 @@ itineraries_bp = Blueprint("itineraries", __name__)
 
 @itineraries_bp.route("/itineraries", methods=["POST"])
 def create_itinerary():
-    """Create a new itinerary for the authenticated user.
-
-    Expected JSON body:
-        {
-          "title": "Summer in Europe",
-          "destinations": ["Paris", "Rome"],
-          "start_date": "2025-06-01",
-          "end_date": "2025-06-15",
-          "notes": "Optional free-text notes"
-        }
-
-    Returns 201 with the created itinerary on success.
-    Requires: Authorization: ******
+    """Create a new itinerary.
+    ---
+    tags:
+      - Itineraries
+    parameters:
+      - name: Authorization
+        in: header
+        type: string
+        required: true
+        description: "Bearer <JWT token>"
+      - in: body
+        name: body
+        required: true
+        schema:
+          type: object
+          required:
+            - title
+            - destinations
+          properties:
+            title:
+              type: string
+              example: Beach Escape
+            destinations:
+              type: array
+              items:
+                type: string
+              example: ["Kribi", "Bali"]
+            start_date:
+              type: string
+              example: "2026-08-01"
+            end_date:
+              type: string
+              example: "2026-08-07"
+            notes:
+              type: string
+              example: Pack sunscreen
+    responses:
+      201:
+        description: Itinerary created
+      400:
+        description: Validation error
+      401:
+        description: Authentication required
     """
     username = get_current_user(request)
     if not username:
@@ -50,7 +80,7 @@ def create_itinerary():
 
     if not isinstance(destinations, list):
         return jsonify({"error": "destinations must be a list"}), 400
-    
+
     if len(destinations) == 0:
         return jsonify({"error": "at least one destination is required"}), 400
 
@@ -76,10 +106,21 @@ def create_itinerary():
 
 @itineraries_bp.route("/itineraries", methods=["GET"])
 def list_itineraries():
-    """List all itineraries for the authenticated user.
-
-    Returns 200 with a JSON array of itinerary objects.
-    Requires: Authorization: ******
+    """List all itineraries for the logged-in user.
+    ---
+    tags:
+      - Itineraries
+    parameters:
+      - name: Authorization
+        in: header
+        type: string
+        required: true
+        description: "Bearer <JWT token>"
+    responses:
+      200:
+        description: List of user itineraries
+      401:
+        description: Authentication required
     """
     username = get_current_user(request)
     if not username:

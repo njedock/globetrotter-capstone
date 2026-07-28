@@ -19,15 +19,31 @@ recommendations_bp = Blueprint("recommendations", __name__)
 
 @recommendations_bp.route("/recommendations", methods=["GET"])
 def get_recommendations():
-    """Return personalised destination recommendations for the logged-in user.
-
-    Recommendations are derived by scoring each destination against the
-    user's preference tags.  Destinations are returned in descending score
-    order.  An optional *limit* query parameter caps the number of results
-    (default 5).
-
-    Requires: Authorization: ******
+    
+    
+    """Get personalised destination recommendations.
+    ---
+    tags:
+      - Recommendations
+    parameters:
+      - name: Authorization
+        in: header
+        type: string
+        required: true
+        description: "Bearer <JWT token>"
+      - name: limit
+        in: query
+        type: integer
+        required: false
+        description: Maximum number of results (default 5)
+    responses:
+      200:
+        description: Scored and sorted destination list
+      401:
+        description: Authentication required
     """
+    
+    
     username = get_current_user(request)
     if not username:
         return jsonify({"error": "authentication required"}), 401
