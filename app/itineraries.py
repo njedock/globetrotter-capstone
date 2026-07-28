@@ -50,14 +50,23 @@ def create_itinerary():
 
     if not isinstance(destinations, list):
         return jsonify({"error": "destinations must be a list"}), 400
+    
+    if len(destinations) == 0:
+        return jsonify({"error": "at least one destination is required"}), 400
+
+    start_date = data.get("start_date", "").strip()
+    end_date = data.get("end_date", "").strip()
+
+    if start_date and end_date and start_date > end_date:
+        return jsonify({"error": "start_date must be before end_date"}), 400
 
     itinerary = {
         "id": str(uuid.uuid4()),
         "username": username,
         "title": title,
         "destinations": destinations,
-        "start_date": data.get("start_date", ""),
-        "end_date": data.get("end_date", ""),
+        "start_date": start_date,
+        "end_date": end_date,
         "notes": data.get("notes", ""),
         "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
     }

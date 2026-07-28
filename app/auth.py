@@ -79,6 +79,15 @@ def register():
     if not username or not password:
         return jsonify({"error": "username and password are required"}), 400
 
+    if len(username) < 3:
+        return jsonify({"error": "username must be at least 3 characters"}), 400
+
+    if len(password) < 6:
+        return jsonify({"error": "password must be at least 6 characters"}), 400
+
+    if not isinstance(preferences, list):
+        return jsonify({"error": "preferences must be a list"}), 400
+
     if get_user_by_username(username):
         return jsonify({"error": "username already exists"}), 409
 

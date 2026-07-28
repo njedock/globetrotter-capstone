@@ -9,6 +9,10 @@ Run locally:
 Or via Docker / docker-compose (see project root).
 """
 import os
+
+from dotenv import load_dotenv
+load_dotenv()  # Load environment variables from .env file (if present)
+
 from app import create_app
 
 app = create_app()
