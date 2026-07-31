@@ -1,0 +1,20 @@
+[
+  {
+    "id": "c76f5d05-5e8d-4156-9f18-7546615838bf",
+    "username": "alice",
+    "password_hash": "pbkdf2:sha256:600000$CXSEOJkjoKe6PNWx$a1c324ab5dad699b5e353a75962fd451a25ed85e6d468094365c0904c3b0e2c5",
+    "preferences": [
+      "beach",
+      "food"
+    ]
+  },
+  {
+    "id": "82a0e031-c198-4820-a482-85c5f384c09f",
+    "username": "charlie",
+    "password_hash": "pbkdf2:sha256:600000$306GjzttDPNo9DcZ$a7c93d1e21571b27dfaf2cb268a064665d0a1fe5b2ee2d579c016e9754be7055",
+    "preferences": [
+      "beach",
+      "food"
+    ]
+  }
+]
