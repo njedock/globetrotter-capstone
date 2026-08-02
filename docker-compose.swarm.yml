@@ -1,0 +1,57 @@
+services:
+  user-service:
+    image: globetrotter-capstone-user-service
+    ports:
+      - "5001:5001"
+    environment:
+      - PORT=5001
+      - SECRET_KEY=my-shared-secret-key-change-me
+    volumes:
+      - ./services/user-service/data:/app/data
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  itinerary-service:
+    image: globetrotter-capstone-itinerary-service
+    ports:
+      - "5002:5002"
+    environment:
+      - PORT=5002
+      - SECRET_KEY=my-shared-secret-key-change-me
+    volumes:
+      - ./services/itinerary-service/data:/app/data
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  recommendation-service:
+    image: globetrotter-capstone-recommendation-service
+    ports:
+      - "5003:5003"
+    environment:
+      - PORT=5003
+      - SECRET_KEY=my-shared-secret-key-change-me
+      - USER_SERVICE_URL=http://user-service:5001
+    volumes:
+      - ./services/recommendation-service/data:/app/data
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+
+  gateway:
+    image: globetrotter-capstone-gateway
+    ports:
+      - "5000:5000"
+    environment:
+      - PORT=5000
+      - USER_SERVICE_URL=http://user-service:5001
+      - ITINERARY_SERVICE_URL=http://itinerary-service:5002
+      - RECOMMENDATION_SERVICE_URL=http://recommendation-service:5003
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
