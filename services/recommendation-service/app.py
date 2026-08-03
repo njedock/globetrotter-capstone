@@ -1,28 +1,87 @@
 """
-Recommendation Service — owns destination search and personalised recommendations.
-Calls User Service over HTTP to get user preferences.
+Recommendation Service — with Redis caching and resilience features.
 """
-import json
 import os
-import urllib.error
-import urllib.request
+import json
+import time
+import uuid
 
 import jwt
+import requests
+import redis
 from flask import Flask, request as flask_request, jsonify
 
 from models import get_all_destinations
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get(
-    "SECRET_KEY", "dev-secret-change-in-prod"
-)
+app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-change-in-prod")
 
-# URL of User Service — configurable via environment variable
 USER_SERVICE_URL = os.environ.get("USER_SERVICE_URL", "http://localhost:5001")
+REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+# Connect to Redis (graceful fallback if unavailable)
+try:
+    cache = redis.from_url(REDIS_URL, decode_responses=True)
+    cache.ping()
+    print("[CACHE] Redis connected")
+except Exception:
+    cache = None
+    print("[CACHE] Redis unavailable — running without cache")
+
+# ---- Circuit Breaker ----
+circuit = {
+    "failures": 0,
+    "state": "closed",      # closed = normal, open = blocking calls
+    "last_failure": 0,
+    "threshold": 3,          # open after 3 consecutive failures
+    "timeout": 30,           # try again after 30 seconds
+}
+
+
+def circuit_allows():
+    """Check if the circuit breaker allows a call to User Service."""
+    if circuit["state"] == "closed":
+        return True
+    if circuit["state"] == "open":
+        if time.time() - circuit["last_failure"] > circuit["timeout"]:
+            circuit["state"] = "half-open"
+            return True
+        return False
+    return True  # half-open: allow one test call
+
+
+def circuit_success():
+    """Record a successful call — reset the breaker."""
+    circuit["failures"] = 0
+    circuit["state"] = "closed"
+
+
+def circuit_failure():
+    """Record a failed call — open the breaker if threshold reached."""
+    circuit["failures"] += 1
+    circuit["last_failure"] = time.time()
+    if circuit["failures"] >= circuit["threshold"]:
+        circuit["state"] = "open"
+        print(f"[CIRCUIT BREAKER] OPEN — User Service unreachable after {circuit['threshold']} failures")
+
+
+# ---- Retry with Exponential Backoff ----
+def call_with_retry(url, max_retries=3):
+    """Call a URL with retries and exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return response
+            return response
+        except requests.exceptions.RequestException:
+            wait = 2 ** attempt  # 1s, 2s, 4s
+            print(f"[RETRY] Attempt {attempt + 1} failed, waiting {wait}s...")
+            time.sleep(wait)
+    return None
 
 
 def get_current_user():
-    """Extract username from JWT token."""
     auth_header = flask_request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
         return None
@@ -36,7 +95,22 @@ def get_current_user():
 
 @app.route("/destinations", methods=["GET"])
 def search_destinations():
-    """Search the destination catalogue (public, no auth required)."""
+    """Search destinations — cached for 60 seconds."""
+    # Build a cache key from the query parameters
+    cache_key = f"destinations:{flask_request.query_string.decode()}"
+
+    # Try cache first
+    if cache:
+        try:
+            cached = cache.get(cache_key)
+            if cached:
+                print(f"[CACHE] HIT for {cache_key}")
+                return jsonify(json.loads(cached)), 200
+        except Exception:
+            pass  # Redis down — fall through to normal path
+
+    print(f"[CACHE] MISS for {cache_key}")
+
     q = flask_request.args.get("q", "").strip().lower()
     tag = flask_request.args.get("tag", "").strip().lower()
     continent = flask_request.args.get("continent", "").strip().lower()
@@ -61,50 +135,65 @@ def search_destinations():
             ]).lower()
             if q not in searchable:
                 continue
-
         if tag and tag not in [t.lower() for t in dest.get("tags", [])]:
             continue
-
         if continent and continent != dest.get("continent", "").lower():
             continue
-
         if max_cost is not None:
             cost = dest.get("avg_cost_per_day")
             if cost is None or cost > max_cost:
                 continue
-
         results.append(dest)
+
+    # Store in cache for 60 seconds
+    if cache:
+        try:
+            cache.setex(cache_key, 60, json.dumps(results))
+        except Exception:
+            pass
 
     return jsonify(results), 200
 
 
 @app.route("/recommendations", methods=["GET"])
 def get_recommendations():
-    """Get personalised recommendations by matching user preferences to destination tags.
-
-    THIS IS THE INTER-SERVICE CALL:
-    Instead of importing get_user_by_username() (which lives in User Service),
-    we make an HTTP request to User Service's /users/<username> endpoint.
-    """
+    """Get recommendations — with circuit breaker and retry on User Service call."""
     username = get_current_user()
     if not username:
         return jsonify({"error": "authentication required"}), 401
 
-    # ---- THE INTER-SERVICE HTTP CALL ----
-    try:
-        with urllib.request.urlopen(
-            f"{USER_SERVICE_URL}/users/{username}", timeout=5
-        ) as response:
-            if response.status != 200:
-                return jsonify({"error": "could not fetch user preferences"}), 502
-            user_data = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError:
-        return jsonify({"error": "could not fetch user preferences"}), 502
-    except urllib.error.URLError:
-        return jsonify({"error": "user service unavailable"}), 503
-    # ---- END INTER-SERVICE CALL ----
+    # ---- Check circuit breaker ----
+    if not circuit_allows():
+        return jsonify({
+            "error": "user service temporarily unavailable",
+            "circuit_state": "open"
+        }), 503
 
+    # ---- Call User Service with retry + backoff ----
+    response = call_with_retry(f"{USER_SERVICE_URL}/users/{username}")
+
+    if response is None:
+        circuit_failure()
+        return jsonify({"error": "user service unavailable after retries"}), 503
+
+    if response.status_code != 200:
+        circuit_failure()
+        return jsonify({"error": "could not fetch user preferences"}), 502
+
+    circuit_success()
+    user_data = response.json()
     preferences = [p.lower() for p in user_data.get("preferences", [])]
+
+    # ---- Check cache for recommendations ----
+    cache_key = f"recommendations:{username}"
+    if cache:
+        try:
+            cached = cache.get(cache_key)
+            if cached:
+                print(f"[CACHE] HIT for {cache_key}")
+                return jsonify(json.loads(cached)), 200
+        except Exception:
+            pass
 
     try:
         limit = int(flask_request.args.get("limit", 5))
@@ -127,13 +216,50 @@ def get_recommendations():
         entry["match_score"] = score
         results.append(entry)
 
+    # Cache for 120 seconds
+    if cache:
+        try:
+            cache.setex(cache_key, 120, json.dumps(results))
+        except Exception:
+            pass
+
     return jsonify(results), 200
+
+
+# ---- Distributed Tracing ----
+@app.before_request
+def add_trace_id():
+    """Attach a trace ID to every request for cross-service tracking."""
+    trace_id = flask_request.headers.get("X-Trace-ID", str(uuid.uuid4()))
+    flask_request.trace_id = trace_id
+
+
+@app.after_request
+def return_trace_id(response):
+    """Include the trace ID in the response headers."""
+    trace_id = getattr(flask_request, "trace_id", "unknown")
+    response.headers["X-Trace-ID"] = trace_id
+    print(f"[TRACE] {flask_request.method} {flask_request.path} → {response.status_code} | trace={trace_id}")
+    return response
 
 
 @app.route("/health", methods=["GET"])
 def health():
-    """Health check."""
-    return jsonify({"status": "healthy", "service": "recommendation-service"}), 200
+    redis_status = "connected"
+    if cache:
+        try:
+            cache.ping()
+        except Exception:
+            redis_status = "disconnected"
+    else:
+        redis_status = "not configured"
+
+    return jsonify({
+        "status": "healthy",
+        "service": "recommendation-service",
+        "redis": redis_status,
+        "circuit_breaker": circuit["state"],
+    }), 200
 
 
 if __name__ == "__main__":
