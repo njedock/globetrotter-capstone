@@ -260,7 +260,54 @@ def health():
         "redis": redis_status,
         "circuit_breaker": circuit["state"],
     }), 200
+    
+# Also fetch user's past itineraries for "past trips" scoring
+    past_destinations = []
+    try:
+        itin_response = requests.get(
+            f"{os.environ.get('ITINERARY_SERVICE_URL', 'http://localhost:5002')}/itineraries",
+            headers={"Authorization": flask_request.headers.get("Authorization", "")},
+            timeout=5
+        )
+        if itin_response.status_code == 200:
+            for itin in itin_response.json():
+                past_destinations.extend(itin.get("destinations", []))
+    except Exception:
+        pass  # Graceful fallback — recommendations still work without past trips
 
+    try:
+        limit = int(flask_request.args.get("limit", 5))
+    except ValueError:
+        return jsonify({"error": "limit must be an integer"}), 400
+
+    destinations = get_all_destinations()
+
+    scored = []
+    for dest in destinations:
+        dest_tags = [t.lower() for t in dest.get("tags", [])]
+        score = 0
+
+        # Preference match (original)
+        score += sum(1 for pref in preferences if pref in dest_tags)
+
+        # Past trip bonus — recommend similar to where they've been
+        if dest.get("name") in past_destinations:
+            score += 1
+
+        # Popularity bonus — cheaper destinations are more "popular"
+        cost = dest.get("avg_cost_per_day", 100)
+        if cost < 80:
+            score += 1
+
+        scored.append((score, dest))
+
+    scored.sort(key=lambda x: (-x[0], x[1].get("name", "")))
+
+    results = []
+    for score, dest in scored[:limit]:
+        entry = dict(dest)
+        entry["match_score"] = score
+        results.append(entry)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5003))

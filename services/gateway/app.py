@@ -75,6 +75,15 @@ def health():
     return jsonify(statuses), 200
 
 
+@app.route("/itineraries/<itinerary_id>/share", methods=["POST"])
+def share_itinerary(itinerary_id):
+    return forward(ITINERARY_SERVICE, f"itineraries/{itinerary_id}/share")
+
+@app.route("/itineraries/shared", methods=["GET"])
+def shared_itineraries():
+    return forward(ITINERARY_SERVICE, "itineraries/shared")
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

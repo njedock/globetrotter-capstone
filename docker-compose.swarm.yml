@@ -46,7 +46,8 @@ services:
       - PORT=5003
       - SECRET_KEY=my-shared-secret-key-change-me
       - REDIS_URL=redis://redis:6379/0
-      - USER_SERVICE_URL=http://user-service:5001
+      - USER_SERVICE_URL=http://user-service:5001 
+      - ITINERARY_SERVICE_URL=http://itinerary-service:5002 
     volumes:
       - ./services/recommendation-service/data:/app/data
     deploy:

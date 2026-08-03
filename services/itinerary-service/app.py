@@ -84,6 +84,65 @@ def health():
     return jsonify({"status": "healthy", "service": "itinerary-service"}), 200
 
 
+
+@app.route("/itineraries/<itinerary_id>/share", methods=["POST"])
+def share_itinerary(itinerary_id):
+    """Share an itinerary with another user."""
+    username = get_current_user()
+    if not username:
+        return jsonify({"error": "authentication required"}), 401
+
+    data = request.get_json(silent=True) or {}
+    share_with = data.get("share_with", "").strip()
+
+    if not share_with:
+        return jsonify({"error": "share_with username is required"}), 400
+
+    itineraries = get_itineraries_for_user(username)
+    target = None
+    for it in itineraries:
+        if it["id"] == itinerary_id:
+            target = it
+            break
+
+    if not target:
+        return jsonify({"error": "itinerary not found"}), 404
+
+    # Add shared_with list if not present
+    if "shared_with" not in target:
+        target["shared_with"] = []
+
+    if share_with not in target["shared_with"]:
+        target["shared_with"].append(share_with)
+
+    # Update the itinerary in storage
+    from models import _read_json, _write_json, ITINERARIES_FILE
+    all_itineraries = _read_json(ITINERARIES_FILE)
+    for i, it in enumerate(all_itineraries):
+        if it["id"] == itinerary_id:
+            all_itineraries[i] = target
+            break
+    _write_json(ITINERARIES_FILE, all_itineraries)
+
+    return jsonify({
+        "message": f"itinerary shared with {share_with}",
+        "itinerary": target
+    }), 200
+
+
+@app.route("/itineraries/shared", methods=["GET"])
+def list_shared_itineraries():
+    """List itineraries shared with the current user."""
+    username = get_current_user()
+    if not username:
+        return jsonify({"error": "authentication required"}), 401
+
+    from models import _read_json, ITINERARIES_FILE
+    all_itineraries = _read_json(ITINERARIES_FILE)
+    shared = [it for it in all_itineraries if username in it.get("shared_with", [])]
+    return jsonify(shared), 200
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5002))
     app.run(host="0.0.0.0", port=port)
